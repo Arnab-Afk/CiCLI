@@ -1,0 +1,13 @@
+project_name: my-app
+language: node
+build_command: npm run build
+test_command: npm test
+docker:
+    image_name: ghcr.io/user/my-app
+    context: .
+    dockerfile: Dockerfile
+deploy:
+    provider: kubernetes
+    manifest_path: k8s/deployment.yaml
+notifications:
+    webhook_url: https://example.com/hook

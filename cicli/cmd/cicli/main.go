@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"cicli/internal/config"
 )
 
 func main() {
 	fmt.Println("CiCLI - CI/CD Pipeline Generator")
-	
+
 	if len(os.Args) < 2 {
 		printHelp()
 		os.Exit(1)
@@ -16,8 +18,10 @@ func main() {
 	command := os.Args[1]
 	switch command {
 	case "init":
-		fmt.Println("Initializing project config...")
-		// TODO: Call config.Init()
+		if err := config.InitConfig(); err != nil {
+			fmt.Printf("Error initializing config: %v\n", err)
+			os.Exit(1)
+		}
 	case "generate":
 		fmt.Println("Generating pipeline...")
 		// TODO: Call generator.Generate()
