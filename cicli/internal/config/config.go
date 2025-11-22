@@ -27,9 +27,17 @@ type Config struct {
 }
 
 func LoadConfig(path string) (*Config, error) {
-	// TODO: Implement YAML parsing
-	fmt.Printf("Loading config from %s\n", path)
-	return &Config{}, nil
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
+	}
+
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return &config, nil
 }
 
 func InitConfig() error {

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"cicli/internal/config"
+	"cicli/internal/generator"
 )
 
 func main() {
@@ -23,8 +24,17 @@ func main() {
 			os.Exit(1)
 		}
 	case "generate":
-		fmt.Println("Generating pipeline...")
-		// TODO: Call generator.Generate()
+		cfg, err := config.LoadConfig("cicli.yaml")
+		if err != nil {
+			fmt.Printf("Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+
+		gen := generator.NewGenerator()
+		if err := gen.Generate(cfg); err != nil {
+			fmt.Printf("Error generating pipeline: %v\n", err)
+			os.Exit(1)
+		}
 	case "docker":
 		fmt.Println("Docker operations...")
 		// TODO: Handle docker publish
