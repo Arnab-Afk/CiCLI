@@ -14,7 +14,7 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-const githubWorkflowTemplate = `name: CI/CD Pipeline
+const workflowTemplate = `name: CI/CD Pipeline
 
 on:
   push:
@@ -23,55 +23,70 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-test-deploy:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      {{- if eq .Language "node" }}
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-      
-      - name: Install dependencies
-        run: npm install
-      {{- else if eq .Language "go" }}
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-      
-      - name: Install dependencies
-        run: go mod download
-      {{- else if eq .Language "python" }}
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      {{- end }}
+    {{- if eq .Language "node" }}
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    - name: Install dependencies
+      run: npm ci
+    {{- else if eq .Language "go" }}
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        cache: true
+    {{- else if eq .Language "python" }}
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+    {{- end }}
 
-      - name: Run tests
-        run: {{ .TestCommand }}
+    - name: Build
+      run: {{ .BuildCommand }}
 
-      # In a real scenario, we would install cicli here or use a docker action.
-      # For this demo, we assume cicli is available or we mock the commands.
-      # Since cicli is a CLI tool we are building, we can't easily "install" it in the runner 
-      # without publishing it first. For the sake of the generated pipeline, 
-      # we will assume the user wants to see where 'cicli' commands would go.
-      
-      # - name: Build Docker image
-      #   run: cicli docker publish --use-git-sha
+    - name: Test
+      run: {{ .TestCommand }}
 
-      # - name: Deploy to Kubernetes
-      #   run: cicli deploy --env prod
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ "{{" }} secrets.DOCKER_USERNAME }}
+        password: ${{ "{{" }} secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and Push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: {{ .Docker.Context }}
+        file: {{ .Docker.Dockerfile }}
+        push: true
+        tags: {{ .Docker.ImageName }}:${{ "{{" }} github.sha }},{{ .Docker.ImageName }}:latest
 
-      # - name: Send deployment notification
-      #   if: always()
-      #   run: cicli notify --status ${{ "{{" }} job.status }} --env prod
+    - name: Deploy to Kubernetes
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ "{{" }} secrets.KUBECONFIG }}
+        
+    - name: Update Deployment
+      run: |
+        kubectl set image deployment/{{ .ProjectName }} {{ .ProjectName }}={{ .Docker.ImageName }}:${{ "{{" }} github.sha }}
+        kubectl rollout status deployment/{{ .ProjectName }}
 `
 
 func (g *Generator) Generate(cfg *config.Config) error {
@@ -90,7 +105,7 @@ func (g *Generator) Generate(cfg *config.Config) error {
 	}
 	defer f.Close()
 
-	tmpl, err := template.New("workflow").Parse(githubWorkflowTemplate)
+	tmpl, err := template.New("workflow").Parse(workflowTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}

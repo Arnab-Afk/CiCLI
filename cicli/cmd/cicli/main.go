@@ -11,6 +11,7 @@ import (
 	"cicli/internal/generator"
 	"cicli/internal/notify"
 	"cicli/internal/store"
+	"cicli/internal/validator"
 )
 
 func main() {
@@ -74,6 +75,11 @@ func main() {
 			}
 		}
 
+		if err := validator.CheckDocker(); err != nil {
+			fmt.Printf("Pre-flight check failed: %v\n", err)
+			os.Exit(1)
+		}
+
 		d := docker.NewClient()
 
 		if useGitSha {
@@ -97,6 +103,11 @@ func main() {
 			os.Exit(1)
 		}
 	case "deploy":
+		if err := validator.CheckKubectl(); err != nil {
+			fmt.Printf("Pre-flight check failed: %v\n", err)
+			os.Exit(1)
+		}
+
 		cfg, err := config.LoadConfig("cicli.yaml")
 		if err != nil {
 			fmt.Printf("Error loading config: %v\n", err)
@@ -145,6 +156,33 @@ func main() {
 				d.Status,
 				d.Image)
 		}
+	case "rollback":
+		if err := validator.CheckKubectl(); err != nil {
+			fmt.Printf("Pre-flight check failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		cfg, err := config.LoadConfig("cicli.yaml")
+		if err != nil {
+			fmt.Printf("Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+
+		env := "dev"
+		for _, arg := range os.Args[2:] {
+			if strings.HasPrefix(arg, "--env=") {
+				env = strings.TrimPrefix(arg, "--env=")
+			}
+		}
+
+		dep := deploy.NewDeployer()
+		// Assuming app name matches project name
+		appName := cfg.ProjectName
+
+		if err := dep.Rollback(appName, env); err != nil {
+			fmt.Printf("Error rolling back: %v\n", err)
+			os.Exit(1)
+		}
 	case "notify":
 		cfg, err := config.LoadConfig("cicli.yaml")
 		if err != nil {
@@ -184,6 +222,7 @@ func printHelp() {
   cicli generate          Generate CI/CD pipeline
   cicli docker publish    Build & push Docker image
   cicli deploy            Deploy to Kubernetes/AWS
+  cicli rollback          Rollback to previous stable version
   cicli history           View deployment history
   cicli notify            Send monitoring alerts`)
 }
