@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/huh"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,16 +47,63 @@ func InitConfig() error {
 		return fmt.Errorf("%s already exists", filename)
 	}
 
+	var (
+		projectName string
+		language    string
+		imageName   string
+		provider    string
+	)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Project Name").
+				Value(&projectName),
+			huh.NewSelect[string]().
+				Title("Language").
+				Options(
+					huh.NewOption("Node.js", "node"),
+					huh.NewOption("Go", "go"),
+					huh.NewOption("Python", "python"),
+				).
+				Value(&language),
+			huh.NewInput().
+				Title("Docker Image Name").
+				Description("e.g. ghcr.io/user/app").
+				Value(&imageName),
+			huh.NewSelect[string]().
+				Title("Deployment Provider").
+				Options(
+					huh.NewOption("Kubernetes", "kubernetes"),
+					huh.NewOption("AWS EKS", "aws"),
+				).
+				Value(&provider),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return fmt.Errorf("failed to run form: %w", err)
+	}
+
 	defaultConfig := Config{
-		ProjectName:  "my-app",
-		Language:     "node",
-		BuildCommand: "npm run build",
+		ProjectName:  projectName,
+		Language:     language,
+		BuildCommand: "npm run build", // Default, could be refined based on lang
 		TestCommand:  "npm test",
 	}
-	defaultConfig.Docker.ImageName = "ghcr.io/user/my-app"
+
+	if language == "go" {
+		defaultConfig.BuildCommand = "go build ./..."
+		defaultConfig.TestCommand = "go test ./..."
+	} else if language == "python" {
+		defaultConfig.BuildCommand = "pip install -r requirements.txt"
+		defaultConfig.TestCommand = "pytest"
+	}
+
+	defaultConfig.Docker.ImageName = imageName
 	defaultConfig.Docker.Context = "."
 	defaultConfig.Docker.Dockerfile = "Dockerfile"
-	defaultConfig.Deploy.Provider = "kubernetes"
+	defaultConfig.Deploy.Provider = provider
 	defaultConfig.Deploy.ManifestPath = "k8s/deployment.yaml"
 	defaultConfig.Notifications.WebhookURL = "https://example.com/hook"
 
