@@ -10,6 +10,7 @@ import (
 	"cicli/internal/docker"
 	"cicli/internal/generator"
 	"cicli/internal/notify"
+	"cicli/internal/store"
 )
 
 func main() {
@@ -121,6 +122,29 @@ func main() {
 			fmt.Printf("Error deploying: %v\n", err)
 			os.Exit(1)
 		}
+	case "history":
+		s, err := store.NewStore()
+		if err != nil {
+			fmt.Printf("Error opening store: %v\n", err)
+			os.Exit(1)
+		}
+
+		deployments, err := s.Load()
+		if err != nil {
+			fmt.Printf("Error loading history: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Deployment History:")
+		fmt.Printf("%-20s %-15s %-10s %-20s %s\n", "TIMESTAMP", "PROJECT", "ENV", "STATUS", "IMAGE")
+		for _, d := range deployments {
+			fmt.Printf("%-20s %-15s %-10s %-20s %s\n",
+				d.Timestamp.Format("2006-01-02 15:04"),
+				d.Project,
+				d.Env,
+				d.Status,
+				d.Image)
+		}
 	case "notify":
 		cfg, err := config.LoadConfig("cicli.yaml")
 		if err != nil {
@@ -160,5 +184,6 @@ func printHelp() {
   cicli generate          Generate CI/CD pipeline
   cicli docker publish    Build & push Docker image
   cicli deploy            Deploy to Kubernetes/AWS
+  cicli history           View deployment history
   cicli notify            Send monitoring alerts`)
 }
